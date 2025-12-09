@@ -156,12 +156,23 @@
         // Load CSV data
         async function loadCSVData() {
             try {
+                // Fetch users_data.csv
                 const usersResponse = await fetch('users_data.csv');
+                if (!usersResponse.ok) throw new Error(`users_data.csv fetch failed: ${usersResponse.status} ${usersResponse.statusText}`);
                 const usersText = await usersResponse.text();
+
+                // Fetch cards_data.csv
                 const cardsResponse = await fetch('cards_data.csv');
+                if (!cardsResponse.ok) throw new Error(`cards_data.csv fetch failed: ${cardsResponse.status} ${cardsResponse.statusText}`);
                 const cardsText = await cardsResponse.text();
-                const mccResponse = await fetch('mcc_codes.json');
-                mccCodes = await mccResponse.json();
+
+                // Try published MCC file first, then fallback to original name
+                let mccResp = await fetch('mcc_codes_published.json');
+                if (!mccResp.ok) {
+                    mccResp = await fetch('mcc_codes.json');
+                    if (!mccResp.ok) throw new Error(`mcc codes fetch failed (tried published and original): ${mccResp.status} ${mccResp.statusText}`);
+                }
+                mccCodes = await mccResp.json();
 
                 const usersData = parseCSV(usersText);
                 const cardsData = parseCSV(cardsText);
