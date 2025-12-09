@@ -153,24 +153,58 @@
         let mccCodes = {};
         let fraudLabels = {};
 
-        // Load CSV data
+        // Helper to attempt a normal fetch then fall back to raw.githubusercontent
+        async function tryFetchWithFallback(localPath, rawPath) {
+            let resp = await fetch(localPath);
+            if (resp.ok) return resp;
+            console.warn(`${localPath} fetch failed: ${resp.status} ${resp.statusText}. Trying raw.githubusercontent fallback.`);
+            // try raw GitHub content URL
+            resp = await fetch(rawPath);
+            if (resp.ok) return resp;
+            // return the last response (failed)
+            return resp;
+        }
+
+        // Load CSV data with fallbacks and clearer UI errors
         async function loadCSVData() {
+            const statusBannerId = 'data-status-banner';
+            function showStatus(msg, isError = false) {
+                let banner = document.getElementById(statusBannerId);
+                if (!banner) {
+                    banner = document.createElement('div');
+                    banner.id = statusBannerId;
+                    banner.style.padding = '8px 12px';
+                    banner.style.margin = '10px 0';
+                    banner.style.borderRadius = '6px';
+                    banner.style.fontSize = '0.95em';
+                    document.querySelector('.container').insertBefore(banner, document.querySelector('.container').firstChild);
+                }
+                banner.textContent = msg;
+                banner.style.background = isError ? '#ffe6e6' : '#eef6ff';
+                banner.style.color = isError ? '#900' : '#033';
+            }
+
             try {
-                // Fetch users_data.csv
-                const usersResponse = await fetch('users_data.csv');
-                if (!usersResponse.ok) throw new Error(`users_data.csv fetch failed: ${usersResponse.status} ${usersResponse.statusText}`);
-                const usersText = await usersResponse.text();
+                showStatus('Loading data files...');
 
-                // Fetch cards_data.csv
-                const cardsResponse = await fetch('cards_data.csv');
-                if (!cardsResponse.ok) throw new Error(`cards_data.csv fetch failed: ${cardsResponse.status} ${cardsResponse.statusText}`);
-                const cardsText = await cardsResponse.text();
+                // Fetch users_data.csv with fallback to raw.githubusercontent
+                const usersResp = await tryFetchWithFallback('users_data.csv', 'https://raw.githubusercontent.com/Lucas43567/FYP/main/users_data.csv');
+                if (!usersResp.ok) throw new Error(`users_data.csv fetch failed: ${usersResp.status} ${usersResp.statusText}`);
+                const usersText = await usersResp.text();
 
-                // Try published MCC file first, then fallback to original name
+                // Fetch cards_data.csv with fallback
+                const cardsResp = await tryFetchWithFallback('cards_data.csv', 'https://raw.githubusercontent.com/Lucas43567/FYP/main/cards_data.csv');
+                if (!cardsResp.ok) throw new Error(`cards_data.csv fetch failed: ${cardsResp.status} ${cardsResp.statusText}`);
+                const cardsText = await cardsResp.text();
+
+                // Try published MCC file first, then fallback to original name and raw
                 let mccResp = await fetch('mcc_codes_published.json');
                 if (!mccResp.ok) {
                     mccResp = await fetch('mcc_codes.json');
-                    if (!mccResp.ok) throw new Error(`mcc codes fetch failed (tried published and original): ${mccResp.status} ${mccResp.statusText}`);
+                    if (!mccResp.ok) {
+                        mccResp = await fetch('https://raw.githubusercontent.com/Lucas43567/FYP/main/mcc_codes_published.json');
+                        if (!mccResp.ok) throw new Error(`mcc codes fetch failed (tried published, original, and raw): ${mccResp.status} ${mccResp.statusText}`);
+                    }
                 }
                 mccCodes = await mccResp.json();
 
@@ -201,9 +235,11 @@
                 // Populate transaction type dropdown with MCC codes
                 populateMCCDropdown();
                 performClustering();
+
+                showStatus('Data loaded successfully.');
             } catch (error) {
                 console.error('Error loading data:', error);
-                alert('Error loading data files. Make sure CSV and JSON files are in the same directory.');
+                showStatus('Error loading data: ' + (error.message || error), true);
             }
         }
 
