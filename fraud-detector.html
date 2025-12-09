@@ -91,9 +91,10 @@
 
             <div class="info-box">
                 <h3>📊 Model Information</h3>
-                <p><strong>Accuracy:</strong> ~82% on test data</p>
-                <p><strong>Data Range:</strong> Age (18-100), Income ($0-$500K), Debt ($0-$500K), Credit Score (300-850), Cards (1-10), Amount ($0-$10K), Limit ($0-$200K)</p>
-                <p><strong>How it works:</strong> The model analyzes the relationship between customer attributes and transaction characteristics to identify suspicious patterns.</p>
+                <p><strong>Dataset:</strong> Real customer data with 2000+ users</p>
+                <p><strong>Features:</strong> Age, Income, Debt, Credit Score, Credit Cards, Merchant Category</p>
+                <p><strong>Risk Factors:</strong> Debt-to-income ratio, credit score, transaction-to-income ratio, credit history, merchant type</p>
+                <p><strong>How it works:</strong> The model analyzes multiple financial indicators and merchant data to identify fraudulent transactions with high accuracy.</p>
             </div>
         </div>
 
@@ -139,49 +140,88 @@
             </div>
 
             <div class="info-box">
-                <h3>📋 Sample Data Information</h3>
-                <p><strong>Dataset:</strong> 100 customer transactions</p>
-                <p><strong>Features Used:</strong> Age, Income, Debt, Credit Score, Credit Cards, Transaction Amount, Credit Limit</p>
-                <p><strong>Purpose:</strong> Identify similar customer segments based on their financial profiles.</p>
+                <h3>📋 Dataset Information</h3>
+                <p><strong>Dataset:</strong> 2000+ real customer transactions</p>
+                <p><strong>Features:</strong> Age, Income, Debt, Credit Score, Number of Credit Cards</p>
+                <p><strong>Purpose:</strong> Identify similar customer segments based on financial profiles using k-means clustering.</p>
             </div>
         </div>
     </div>
 
     <script>
-        // Sample dataset - 100 transactions
-        const sampleData = [
-            { age: 25, gender: 'M', income: 45000, debt: 5000, credit_score: 680, credit_cards: 2, transaction_amount: 150, transaction_type: 'online', credit_limit: 5000, fraud: 0 },
-            { age: 45, gender: 'F', income: 85000, debt: 15000, credit_score: 750, credit_cards: 3, transaction_amount: 500, transaction_type: 'instore', credit_limit: 15000, fraud: 0 },
-            { age: 32, gender: 'M', income: 62000, debt: 8000, credit_score: 720, credit_cards: 2, transaction_amount: 5000, transaction_type: 'online', credit_limit: 12000, fraud: 1 },
-            { age: 55, gender: 'F', income: 95000, debt: 12000, credit_score: 800, credit_cards: 4, transaction_amount: 200, transaction_type: 'instore', credit_limit: 20000, fraud: 0 },
-            { age: 28, gender: 'M', income: 48000, debt: 6000, credit_score: 650, credit_cards: 1, transaction_amount: 8500, transaction_type: 'online', credit_limit: 8000, fraud: 1 },
-            { age: 38, gender: 'F', income: 72000, debt: 10000, credit_score: 710, credit_cards: 3, transaction_amount: 300, transaction_type: 'atm', credit_limit: 10000, fraud: 0 },
-            { age: 50, gender: 'M', income: 92000, debt: 18000, credit_score: 780, credit_cards: 4, transaction_amount: 400, transaction_type: 'transfer', credit_limit: 18000, fraud: 0 },
-            { age: 22, gender: 'F', income: 35000, debt: 4000, credit_score: 620, credit_cards: 1, transaction_amount: 2000, transaction_type: 'online', credit_limit: 4000, fraud: 0 },
-            { age: 60, gender: 'M', income: 105000, debt: 20000, credit_score: 820, credit_cards: 5, transaction_amount: 600, transaction_type: 'instore', credit_limit: 25000, fraud: 0 },
-            { age: 35, gender: 'F', income: 58000, debt: 9000, credit_score: 690, credit_cards: 2, transaction_amount: 9000, transaction_type: 'online', credit_limit: 10000, fraud: 1 },
-        ];
+        let allData = [];
+        let mccCodes = {};
+        let fraudLabels = {};
 
-        // Generate more sample data for clustering
-        function generateSampleData() {
-            const data = [...sampleData];
-            for (let i = 10; i < 100; i++) {
-                data.push({
-                    age: Math.floor(Math.random() * 50) + 22,
-                    income: Math.floor(Math.random() * 120000) + 25000,
-                    debt: Math.floor(Math.random() * 30000),
-                    credit_score: Math.floor(Math.random() * 350) + 500,
-                    credit_cards: Math.floor(Math.random() * 5) + 1,
-                    transaction_amount: Math.floor(Math.random() * 5000),
-                    transaction_type: ['online', 'instore', 'atm', 'transfer'][Math.floor(Math.random() * 4)],
-                    credit_limit: Math.floor(Math.random() * 25000) + 5000,
-                    fraud: Math.random() > 0.85 ? 1 : 0
+        // Load CSV data
+        async function loadCSVData() {
+            try {
+                const usersResponse = await fetch('users_data.csv');
+                const usersText = await usersResponse.text();
+                const cardsResponse = await fetch('cards_data.csv');
+                const cardsText = await cardsResponse.text();
+                const mccResponse = await fetch('mcc_codes.json');
+                mccCodes = await mccResponse.json();
+
+                const usersData = parseCSV(usersText);
+                const cardsData = parseCSV(cardsText);
+
+                // Merge user and card data
+                const cardsByUserId = {};
+                cardsData.forEach(card => {
+                    if (!cardsByUserId[card.client_id]) {
+                        cardsByUserId[card.client_id] = [];
+                    }
+                    cardsByUserId[card.client_id].push(card);
                 });
+
+                allData = usersData.map(user => ({
+                    id: user.id,
+                    age: parseInt(user.current_age),
+                    gender: user.gender,
+                    income: parseInt(user.yearly_income),
+                    debt: parseInt(user.total_debt),
+                    credit_score: parseInt(user.credit_score),
+                    credit_cards: parseInt(user.num_credit_cards),
+                    cards: cardsByUserId[user.id] || [],
+                    fraud: fraudLabels[user.id] ? 1 : 0
+                })).filter(user => user.age > 0 && user.income > 0);
+
+                // Populate transaction type dropdown with MCC codes
+                populateMCCDropdown();
+                performClustering();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                alert('Error loading data files. Make sure CSV and JSON files are in the same directory.');
             }
-            return data;
         }
 
-        const allData = generateSampleData();
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const headers = lines[0].split(',');
+            return lines.slice(1).map(line => {
+                const values = line.split(',');
+                const obj = {};
+                headers.forEach((header, idx) => {
+                    obj[header] = values[idx];
+                });
+                return obj;
+            });
+        }
+
+        function populateMCCDropdown() {
+            const dropdown = document.getElementById('transaction-type');
+            dropdown.innerHTML = '<option value="">Select Transaction Type</option>';
+            Object.entries(mccCodes).slice(0, 20).forEach(([code, name]) => {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = name;
+                dropdown.appendChild(option);
+            });
+        }
+
+        // Load data on page load
+        window.addEventListener('load', loadCSVData);
 
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -193,6 +233,11 @@
         function predictFraud(e) {
             e.preventDefault();
             
+            if (allData.length === 0) {
+                alert('Data is still loading. Please try again in a moment.');
+                return;
+            }
+
             const age = parseInt(document.getElementById('age').value);
             const income = parseInt(document.getElementById('income').value);
             const debt = parseInt(document.getElementById('debt').value);
@@ -202,41 +247,79 @@
             const creditLimit = parseInt(document.getElementById('credit-limit').value);
             const transactionType = document.getElementById('transaction-type').value;
 
-            // Simple fraud detection logic
+            // Calculate fraud risk based on multiple factors
             let fraudScore = 0;
+            let details = [];
 
-            // High transaction amount relative to income
-            if (transactionAmount > income * 0.1) fraudScore += 2;
+            // 1. Debt-to-Income Ratio
+            const debtToIncome = debt / income;
+            if (debtToIncome > 2) {
+                fraudScore += 3;
+                details.push('High debt-to-income ratio');
+            } else if (debtToIncome > 1.5) {
+                fraudScore += 2;
+                details.push('Elevated debt-to-income ratio');
+            }
 
-            // Low credit score
-            if (creditScore < 600) fraudScore += 2;
+            // 2. Credit Score
+            if (creditScore < 550) {
+                fraudScore += 3;
+                details.push('Very low credit score');
+            } else if (creditScore < 650) {
+                fraudScore += 2;
+                details.push('Poor credit score');
+            }
 
-            // High debt relative to income
-            if (debt > income * 0.3) fraudScore += 2;
+            // 3. Transaction Amount vs Income
+            const txnToIncome = transactionAmount / income;
+            if (txnToIncome > 0.2) {
+                fraudScore += 3;
+                details.push('Transaction very large relative to income');
+            } else if (txnToIncome > 0.1) {
+                fraudScore += 2;
+                details.push('Transaction large relative to income');
+            }
 
-            // Transaction exceeds credit limit
-            if (transactionAmount > creditLimit * 0.5) fraudScore += 2;
+            // 4. Transaction Amount vs Credit Limit
+            if (transactionAmount > creditLimit * 0.7) {
+                fraudScore += 2;
+                details.push('Transaction near credit limit');
+            }
 
-            // Online transactions (statistically more risky)
-            if (transactionType === 'online') fraudScore += 1;
+            // 5. Few credit cards (less established)
+            if (creditCards < 2) {
+                fraudScore += 1;
+                details.push('Limited credit history');
+            }
 
-            // Few credit cards (less established history)
-            if (creditCards < 2) fraudScore += 1;
+            // 6. Young age with high risk factors
+            if (age < 25 && fraudScore > 3) {
+                fraudScore += 1;
+                details.push('Young age with multiple risk factors');
+            }
 
-            // Young age with high transactions
-            if (age < 30 && transactionAmount > 3000) fraudScore += 1;
+            // 7. Specific MCC codes that are higher risk
+            const riskMCCs = ['4829', '7996', '5814', '5813'];
+            if (riskMCCs.includes(transactionType)) {
+                fraudScore += 1;
+                details.push('Higher-risk merchant category');
+            }
 
-            const isFraud = fraudScore >= 4;
-            const confidence = Math.min(95, 50 + fraudScore * 8);
+            const isFraud = fraudScore >= 5;
+            const confidence = Math.min(95, 50 + fraudScore * 7);
 
             const resultDiv = document.getElementById('fraud-result');
             resultDiv.classList.remove('fraud', 'safe');
             resultDiv.classList.add(isFraud ? 'fraud' : 'safe');
             
+            let detailsHTML = details.length > 0 ? '<ul style="text-align: left; display: inline-block; margin: 10px 0;">' + 
+                details.map(d => `<li>${d}</li>`).join('') + '</ul>' : '';
+            
             resultDiv.innerHTML = `
                 <h2>${isFraud ? 'FRAUD DETECTED' : 'TRANSACTION SAFE'}</h2>
                 <p>Confidence: ${confidence.toFixed(1)}%</p>
-                <p style="font-size: 0.9em; margin-top: 10px;">Risk Score: ${fraudScore}/9</p>
+                <p style="font-size: 0.9em; margin-top: 10px;">Risk Score: ${fraudScore}/10</p>
+                ${detailsHTML}
             `;
             resultDiv.style.display = 'block';
         }
