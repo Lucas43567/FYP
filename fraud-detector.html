@@ -407,9 +407,15 @@
 
             const ctx = document.getElementById('clusterChart').getContext('2d');
             if (window.clusterChart) {
-                window.clusterChart.destroy();
+                if (typeof window.clusterChart.destroy === 'function') {
+                    try { window.clusterChart.destroy(); } catch (e) { console.warn('Error destroying previous chart:', e); }
+                } else {
+                    // Not a Chart instance (could be legacy value), clear reference to avoid errors
+                    console.warn('window.clusterChart exists but has no destroy(); resetting reference.');
+                }
+                window.clusterChart = null;
             }
-            
+
             window.clusterChart = new Chart(ctx, {
                 type: 'scatter',
                 data: chartData,
